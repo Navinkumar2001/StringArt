@@ -50,6 +50,29 @@
             margin: 20px 0;
             flex-wrap: wrap;
         }
+        .thickness-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin: 15px 0;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            border: 1px solid #dee2e6;
+        }
+        .thickness-controls label {
+            font-weight: 600;
+            color: #495057;
+        }
+        .thickness-controls input[type="range"] {
+            width: 150px;
+            margin: 0 10px;
+        }
+        .thickness-controls span {
+            font-weight: bold;
+            color: #667eea;
+            min-width: 30px;
+        }
         button {
             padding: 15px 25px;
             border: none;
@@ -138,6 +161,13 @@
             <button class="btn-primary" onclick="generateArt()">Generate Full Art</button>
         </div>
         
+        <div class="thickness-controls">
+            <label for="mainThickness">Line Thickness: </label>
+            <input type="range" id="mainThickness" min="0.5" max="5" step="0.1" value="1.5">
+            <span id="thicknessValue">1.5</span>px
+            <button class="btn-secondary" onclick="updateThickness()">Apply</button>
+        </div>
+        
         <div class="info">
             <div>Current Position: <span id="currentPos">0</span></div>
             <div>Total Pins: <span id="totalPins">0</span></div>
@@ -157,6 +187,39 @@
         let pinSequence = [];
         let currentIndex = 0;
         let totalPinsInCircle = 200;
+        let currentThickness = 1.5;
+        
+        // Update thickness display when slider changes
+        document.addEventListener('DOMContentLoaded', function() {
+            const thicknessSlider = document.getElementById('mainThickness');
+            const thicknessValue = document.getElementById('thicknessValue');
+            
+            thicknessSlider.addEventListener('input', function() {
+                thicknessValue.textContent = this.value;
+            });
+            
+            // Auto-apply thickness on slider release
+            thicknessSlider.addEventListener('change', function() {
+                updateThickness();
+            });
+            
+            // Apply thickness on Enter key
+            thicknessSlider.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    updateThickness();
+                }
+            });
+        });
+        
+        function updateThickness() {
+            const thickness = parseFloat(document.getElementById('mainThickness').value);
+            currentThickness = thickness;
+            
+            // Redraw current view with new thickness
+            if (pinSequence.length > 0) {
+                simulateStep();
+            }
+        }
         
         function loadSequence() {
             const input = document.getElementById('pinSequence').value;
@@ -263,7 +326,7 @@
             }
             
             ctx.strokeStyle = '#000';
-            ctx.lineWidth = 1.5;
+            ctx.lineWidth = currentThickness;
             ctx.globalAlpha = 0.6;
             
             for (let i = 0; i < currentIndex && i < pinSequence.length - 1; i++) {
@@ -346,7 +409,7 @@
             }
             
             ctx.strokeStyle = '#000';
-            ctx.lineWidth = 1;
+            ctx.lineWidth = currentThickness;
             ctx.globalAlpha = 0.8;
             
             for (let i = 0; i < pinSequence.length - 1; i++) {
@@ -462,7 +525,7 @@
             document.getElementById('pinSequence').value = sequence.join(', ');
             updateDisplay();
             
-            drawStringArt(sequence, numPins, thickness);
+            drawStringArt(sequence, numPins, currentThickness);
         }
         
         function generateSequenceFromImage(ctx, numPins, numLines, radius, centerX, centerY) {
@@ -597,7 +660,7 @@
             }
             
             ctx.strokeStyle = '#000';
-            ctx.lineWidth = thickness;
+            ctx.lineWidth = thickness || currentThickness;
             ctx.globalAlpha = 0.8;
             
             for (let i = 0; i < sequence.length - 1; i++) {
