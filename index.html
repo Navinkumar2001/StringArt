@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>String Art Visualizer</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+        }
+        .input-section {
+            margin-bottom: 20px;
+        }
+        textarea {
+            width: 100%;
+            height: 100px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .go-to-line {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin: 10px 0;
+        }
+        .go-to-line input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            width: 100px;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 15px 25px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+        .btn-secondary:hover {
+            background-color: #545b62;
+        }
+        .info {
+            display: flex;
+            gap: 20px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .canvas-container {
+            text-align: center;
+            margin-top: 20px;
+        }
+        canvas {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #fff;
+        }
+        .current-sequence {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            margin: 25px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 1.5rem;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>String Art Visualizer</h1>
+        
+        <div class="input-section">
+            <label for="pinSequence">Pin Sequence (comma-separated):</label>
+            <textarea id="pinSequence" placeholder="Enter pin sequence: 0, 199, 97, 86, ..."></textarea>
+        </div>
+        
+        <div class="input-section">
+            <h3>Or Upload Image to Convert to String Art:</h3>
+            <input type="file" id="imageUpload" accept="image/*">
+            <div style="display: flex; gap: 10px; margin: 10px 0; align-items: center;">
+                <label>Pins: <input type="number" id="numPins" value="200" min="50" max="500" style="width: 80px;"></label>
+                <label>Lines: <input type="number" id="numLines" value="3500" min="100" max="10000" style="width: 80px;"></label>
+                <label>Thickness: <input type="number" id="lineThickness" value="1" min="0.1" max="5" step="0.1" style="width: 80px;"></label>
+                <button class="btn-primary" onclick="convertImage()">Convert to String Art</button>
+            </div>
+        </div>
+        
+        <div class="go-to-line">
+            <label for="gotoLine">Go to Line:</label>
+            <input type="number" id="gotoLine" min="1" placeholder="Line #">
+            <button class="btn-secondary" onclick="goToLine()">Go</button>
+        </div>
+        
+        <div class="controls">
+            <button class="btn-primary" onclick="loadSequence()">Load Sequence</button>
+            <button class="btn-secondary" onclick="previousPin()">← Previous</button>
+            <button class="btn-secondary" onclick="nextPin()">Next →</button>
+            <button class="btn-primary" onclick="simulateStep()">Simulate Step</button>
+            <button class="btn-primary" onclick="generateArt()">Generate Full Art</button>
+        </div>
+        
+        <div class="info">
+            <div>Current Position: <span id="currentPos">0</span></div>
+            <div>Total Pins: <span id="totalPins">0</span></div>
+            <div>Lines Count: <span id="linesCount">0</span></div>
+        </div>
+        
+        <div class="current-sequence">
+            Current: <span id="currentSequence">-</span>
+        </div>
+        
+        <div class="canvas-container">
+            <canvas id="artCanvas" width="800" height="800"></canvas>
+        </div>
+    </div>
+
+    <script>
+        let pinSequence = [];
+        let currentIndex = 0;
+        let totalPinsInCircle = 200;
+        
+        function loadSequence() {
+            const input = document.getElementById('pinSequence').value;
+            if (!input.trim()) {
+                alert('Please enter a pin sequence');
+                return;
+            }
+            
+            pinSequence = input.split(',').map(num => parseInt(num.trim())).filter(num => !isNaN(num));
+            currentIndex = 0;
+            
+            document.getElementById('totalPins').textContent = pinSequence.length;
+            document.getElementById('gotoLine').max = pinSequence.length;
+            updateDisplay();
+            simulateStep();
+        }
+        
+        function previousPin() {
+            if (pinSequence.length === 0) return;
+            currentIndex = (currentIndex - 1 + pinSequence.length) % pinSequence.length;
+            updateDisplay();
+            simulateStep();
+        }
+        
+        function nextPin() {
+            if (pinSequence.length === 0) return;
+            currentIndex = (currentIndex + 1) % pinSequence.length;
+            updateDisplay();
+            simulateStep();
+        }
+        
+        function updateDisplay() {
+            document.getElementById('currentPos').textContent = currentIndex + 1;
+            document.getElementById('linesCount').textContent = Math.max(0, currentIndex);
+            
+            if (pinSequence.length > 0) {
+                const current = pinSequence[currentIndex];
+                const prev = currentIndex > 0 ? pinSequence[currentIndex - 1] : '-';
+                const next = currentIndex < pinSequence.length - 1 ? pinSequence[currentIndex + 1] : '-';
+                document.getElementById('currentSequence').textContent = `${prev} → ${current} → ${next}`;
+                
+                highlightCurrentPin();
+            }
+        }
+        
+        function highlightCurrentPin() {
+            const textarea = document.getElementById('pinSequence');
+            const text = textarea.value;
+            const pins = text.split(',');
+            
+            let startPos = 0;
+            for (let i = 0; i < currentIndex && i < pins.length; i++) {
+                startPos += pins[i].length + 1;
+            }
+            
+            if (currentIndex < pins.length) {
+                const endPos = startPos + pins[currentIndex].length;
+                
+                textarea.focus();
+                textarea.setSelectionRange(startPos, endPos);
+                
+                const lineHeight = 20;
+                const lines = text.substring(0, startPos).split('\n').length;
+                textarea.scrollTop = Math.max(0, (lines - 3) * lineHeight);
+            }
+        }
+        
+        function goToLine() {
+            const lineNum = parseInt(document.getElementById('gotoLine').value);
+            if (isNaN(lineNum) || lineNum < 1 || lineNum > pinSequence.length) {
+                alert(`Please enter a valid line number (1-${pinSequence.length})`);
+                return;
+            }
+            
+            currentIndex = lineNum - 1;
+            updateDisplay();
+            simulateStep();
+        }
+        
+        function simulateStep() {
+            if (pinSequence.length === 0) {
+                alert('Please load a pin sequence first');
+                return;
+            }
+            
+            const canvas = document.getElementById('artCanvas');
+            const ctx = canvas.getContext('2d');
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const radius = 380;
+            
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = '#ccc';
+            for (let i = 0; i < totalPinsInCircle; i++) {
+                const angle = (i / totalPinsInCircle) * 2 * Math.PI;
+                const x = centerX + radius * Math.cos(angle);
+                const y = centerY + radius * Math.sin(angle);
+                
+                ctx.beginPath();
+                ctx.arc(x, y, 2, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+            
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 1.5;
+            ctx.globalAlpha = 0.6;
+            
+            for (let i = 0; i < currentIndex && i < pinSequence.length - 1; i++) {
+                const pin1 = pinSequence[i];
+                const pin2 = pinSequence[i + 1];
+                
+                const angle1 = (pin1 / totalPinsInCircle) * 2 * Math.PI;
+                const angle2 = (pin2 / totalPinsInCircle) * 2 * Math.PI;
+                
+                const x1 = centerX + radius * Math.cos(angle1);
+                const y1 = centerY + radius * Math.sin(angle1);
+                const x2 = centerX + radius * Math.cos(angle2);
+                const y2 = centerY + radius * Math.sin(angle2);
+                
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            }
+            
+            if (currentIndex < pinSequence.length - 1) {
+                const pin1 = pinSequence[currentIndex];
+                const pin2 = pinSequence[currentIndex + 1];
+                
+                const angle1 = (pin1 / totalPinsInCircle) * 2 * Math.PI;
+                const angle2 = (pin2 / totalPinsInCircle) * 2 * Math.PI;
+                
+                const x1 = centerX + radius * Math.cos(angle1);
+                const y1 = centerY + radius * Math.sin(angle1);
+                const x2 = centerX + radius * Math.cos(angle2);
+                const y2 = centerY + radius * Math.sin(angle2);
+                
+                ctx.strokeStyle = '#ff0000';
+                ctx.lineWidth = 3;
+                ctx.globalAlpha = 1;
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            }
+            
+            if (currentIndex < pinSequence.length) {
+                const currentPin = pinSequence[currentIndex];
+                const angle = (currentPin / totalPinsInCircle) * 2 * Math.PI;
+                const x = centerX + radius * Math.cos(angle);
+                const y = centerY + radius * Math.sin(angle);
+                
+                ctx.fillStyle = '#ff0000';
+                ctx.globalAlpha = 1;
+                ctx.beginPath();
+                ctx.arc(x, y, 5, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+        }
+        
+        function generateArt() {
+            if (pinSequence.length === 0) {
+                alert('Please load a pin sequence first');
+                return;
+            }
+            
+            const canvas = document.getElementById('artCanvas');
+            const ctx = canvas.getContext('2d');
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const radius = 380;
+            
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = '#666';
+            for (let i = 0; i < totalPinsInCircle; i++) {
+                const angle = (i / totalPinsInCircle) * 2 * Math.PI;
+                const x = centerX + radius * Math.cos(angle);
+                const y = centerY + radius * Math.sin(angle);
+                
+                ctx.beginPath();
+                ctx.arc(x, y, 2, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+            
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 1;
+            ctx.globalAlpha = 0.8;
+            
+            for (let i = 0; i < pinSequence.length - 1; i++) {
+                const pin1 = pinSequence[i];
+                const pin2 = pinSequence[i + 1];
+                
+                const angle1 = (pin1 / totalPinsInCircle) * 2 * Math.PI;
+                const angle2 = (pin2 / totalPinsInCircle) * 2 * Math.PI;
+                
+                const x1 = centerX + radius * Math.cos(angle1);
+                const y1 = centerY + radius * Math.sin(angle1);
+                const x2 = centerX + radius * Math.cos(angle2);
+                const y2 = centerY + radius * Math.sin(angle2);
+                
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            }
+        }
+        
+        function convertImage() {
+            const fileInput = document.getElementById('imageUpload');
+            const numPins = parseInt(document.getElementById('numPins').value);
+            const numLines = parseInt(document.getElementById('numLines').value);
+            const thickness = parseFloat(document.getElementById('lineThickness').value);
+            
+            if (!fileInput.files[0]) {
+                alert('Please select an image first');
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    generateStringArtFromImage(img, numPins, numLines, thickness);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(fileInput.files[0]);
+        }
+        
+        function generateStringArtFromImage(img, numPins, numLines, thickness) {
+            const canvas = document.getElementById('artCanvas');
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const radius = 380;
+            
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            
+            const size = Math.min(img.width, img.height);
+            const scale = (radius * 2) / size;
+            const drawSize = size * scale;
+            
+            // Fill with white background
+            tempCtx.fillStyle = '#fff';
+            tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+            
+            // Draw image centered and scaled
+            tempCtx.drawImage(img, 
+                (img.width - size) / 2, (img.height - size) / 2, size, size,
+                centerX - drawSize/2, centerY - drawSize/2, drawSize, drawSize
+            );
+            
+            // Convert to grayscale and enhance contrast
+            const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+            const data = imageData.data;
+            
+            // Convert to grayscale
+            for (let i = 0; i < data.length; i += 4) {
+                const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+                data[i] = data[i + 1] = data[i + 2] = gray;
+            }
+            
+            // Apply contrast enhancement and circular mask
+            for (let i = 0; i < data.length; i += 4) {
+                const x = (i / 4) % tempCanvas.width;
+                const y = Math.floor((i / 4) / tempCanvas.width);
+                
+                // Check if pixel is within the circle
+                const dx = x - centerX;
+                const dy = y - centerY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance <= radius) {
+                    // Enhance contrast using sigmoid function
+                    let gray = data[i];
+                    gray = gray / 255; // Normalize to 0-1
+                    gray = 1 / (1 + Math.exp(-12 * (gray - 0.5))); // Sigmoid contrast
+                    gray = Math.round(gray * 255); // Back to 0-255
+                    
+                    data[i] = data[i + 1] = data[i + 2] = gray;
+                } else {
+                    // Outside circle - make white
+                    data[i] = data[i + 1] = data[i + 2] = 255;
+                }
+            }
+            
+            tempCtx.putImageData(imageData, 0, 0);
+            
+            console.log('Starting string art generation...');
+            const sequence = generateSequenceFromImage(tempCtx, numPins, numLines, radius, centerX, centerY);
+            console.log('Generated sequence with', sequence.length, 'pins');
+            
+            pinSequence = sequence;
+            totalPinsInCircle = numPins;
+            currentIndex = 0;
+            document.getElementById('totalPins').textContent = sequence.length;
+            document.getElementById('pinSequence').value = sequence.join(', ');
+            updateDisplay();
+            
+            drawStringArt(sequence, numPins, thickness);
+        }
+        
+        function generateSequenceFromImage(ctx, numPins, numLines, radius, centerX, centerY) {
+            const sequence = [0];
+            let currentPin = 0;
+            const usedPins = new Array(numPins).fill(0);
+            
+            // Create a working copy of the image data
+            const workingImageData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
+            const workingData = new Uint8ClampedArray(workingImageData.data);
+            
+            for (let line = 0; line < numLines - 1; line++) {
+                let bestPin = -1;
+                let bestScore = -1;
+                
+                for (let pin = 0; pin < numPins; pin++) {
+                    if (pin === currentPin) continue;
+                    
+                    // Penalize recently used pins
+                    const recentUsePenalty = Math.max(0, 50 - (line - usedPins[pin]));
+                    
+                    const score = calculateLineScore(workingData, ctx.canvas.width, ctx.canvas.height, 
+                                                   currentPin, pin, numPins, radius, centerX, centerY) - recentUsePenalty;
+                    
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestPin = pin;
+                    }
+                }
+                
+                if (bestPin !== -1) {
+                    sequence.push(bestPin);
+                    
+                    // Simulate drawing the line by darkening pixels
+                    drawLineOnImageData(workingData, ctx.canvas.width, ctx.canvas.height,
+                                      currentPin, bestPin, numPins, radius, centerX, centerY);
+                    
+                    usedPins[bestPin] = line;
+                    currentPin = bestPin;
+                }
+            }
+            
+            return sequence;
+        }
+        
+        function calculateLineScore(imageData, width, height, pin1, pin2, numPins, radius, centerX, centerY) {
+            const angle1 = (pin1 / numPins) * 2 * Math.PI;
+            const angle2 = (pin2 / numPins) * 2 * Math.PI;
+            
+            const x1 = centerX + radius * Math.cos(angle1);
+            const y1 = centerY + radius * Math.sin(angle1);
+            const x2 = centerX + radius * Math.cos(angle2);
+            const y2 = centerY + radius * Math.sin(angle2);
+            
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            const steps = Math.max(1, Math.floor(length));
+            
+            let score = 0;
+            let validPixels = 0;
+            
+            for (let i = 0; i <= steps; i++) {
+                const x = Math.round(x1 + (dx * i) / steps);
+                const y = Math.round(y1 + (dy * i) / steps);
+                
+                if (x >= 0 && x < width && y >= 0 && y < height) {
+                    const pixelIndex = (y * width + x) * 4;
+                    const darkness = 255 - imageData[pixelIndex]; // Higher score for darker pixels
+                    score += darkness;
+                    validPixels++;
+                }
+            }
+            
+            return validPixels > 0 ? score / validPixels : 0;
+        }
+        
+        function drawLineOnImageData(imageData, width, height, pin1, pin2, numPins, radius, centerX, centerY) {
+            const angle1 = (pin1 / numPins) * 2 * Math.PI;
+            const angle2 = (pin2 / numPins) * 2 * Math.PI;
+            
+            const x1 = centerX + radius * Math.cos(angle1);
+            const y1 = centerY + radius * Math.sin(angle1);
+            const x2 = centerX + radius * Math.cos(angle2);
+            const y2 = centerY + radius * Math.sin(angle2);
+            
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            const steps = Math.max(1, Math.floor(length));
+            
+            // Lighten pixels along the line to simulate string coverage
+            const lineOpacity = 0.15; // How much each line lightens the image
+            
+            for (let i = 0; i <= steps; i++) {
+                const x = Math.round(x1 + (dx * i) / steps);
+                const y = Math.round(y1 + (dy * i) / steps);
+                
+                if (x >= 0 && x < width && y >= 0 && y < height) {
+                    const pixelIndex = (y * width + x) * 4;
+                    
+                    // Lighten the pixel (simulate string covering dark areas)
+                    const currentValue = imageData[pixelIndex];
+                    const newValue = Math.min(255, currentValue + (255 - currentValue) * lineOpacity);
+                    
+                    imageData[pixelIndex] = newValue;     // R
+                    imageData[pixelIndex + 1] = newValue; // G
+                    imageData[pixelIndex + 2] = newValue; // B
+                }
+            }
+        }
+        
+        function drawStringArt(sequence, numPins, thickness) {
+            const canvas = document.getElementById('artCanvas');
+            const ctx = canvas.getContext('2d');
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const radius = 380;
+            
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = '#666';
+            for (let i = 0; i < numPins; i++) {
+                const angle = (i / numPins) * 2 * Math.PI;
+                const x = centerX + radius * Math.cos(angle);
+                const y = centerY + radius * Math.sin(angle);
+                
+                ctx.beginPath();
+                ctx.arc(x, y, 2, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+            
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = thickness;
+            ctx.globalAlpha = 0.8;
+            
+            for (let i = 0; i < sequence.length - 1; i++) {
+                const pin1 = sequence[i];
+                const pin2 = sequence[i + 1];
+                
+                const angle1 = (pin1 / numPins) * 2 * Math.PI;
+                const angle2 = (pin2 / numPins) * 2 * Math.PI;
+                
+                const x1 = centerX + radius * Math.cos(angle1);
+                const y1 = centerY + radius * Math.sin(angle1);
+                const x2 = centerX + radius * Math.cos(angle2);
+                const y2 = centerY + radius * Math.sin(angle2);
+                
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            }
+        }
+        
+        document.getElementById('pinSequence').value = '0, 199, 97, 86, 175, 64, 153, 42, 131, 20, 109, 187, 76, 165, 54, 143, 32, 121, 10, 99';
+    </script>
+</body>
+</html>
